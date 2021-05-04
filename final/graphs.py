@@ -7,9 +7,9 @@ def sensorCheck(dataFrame, selectedSensor):
     if selectedSensor != None:
         if isinstance(selectedSensor, list):
             if isinstance(selectedSensor[0], str): 
-                data = dataFrame[dataFrame['Sensor_Name'] in selectedSensor]
+                data = dataFrame[dataFrame['Sensor_Name'].isin(selectedSensor)]
             if isinstance(selectedSensor[0], int):
-                data = dataFrame[dataFrame['Sensor_ID'] in selectedSensor]
+                data = dataFrame[dataFrame['Sensor_ID'].isin(selectedSensor)]
         elif isinstance(selectedSensor, int or str):
             if isinstance(selectedSensor, str): 
                 data = dataFrame[dataFrame['Sensor_Name'] == selectedSensor]
@@ -47,10 +47,10 @@ def dateCheck(dataFrame, date):
         if dt3 < dt2:
             raise('Invalid date selection')
         start = dt2 - dt1
-        start = start.total_seconds()//3600
+        start = int(start.total_seconds()//3600)
         
         end = dt3 - dt1
-        end = end.total_seconds()//3600
+        end = int(end.total_seconds()//3600)
     else:
         raise('not implemented error')
     return dataFrame.loc[start:end]
