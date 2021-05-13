@@ -85,7 +85,7 @@ def mapUpdate(dataFrame, date=None, selectedSensor=None):
     return px.scatter_mapbox(data, lon='longitude', lat='latitude' 
                   ,hover_name='Sensor_Name', hover_data=['Hourly_Counts'], title=date
                   ,color='Hourly_Counts',zoom=12
-                 ,animation_frame = data.index,mapbox_style="dark"
+                 ,animation_frame = data.index,mapbox_style="dark",template=template
                  )
 
 def histUpdate(dataFrame, timePeriod, selectedSensor):
@@ -103,7 +103,7 @@ def histUpdate(dataFrame, timePeriod, selectedSensor):
 
 def prediction(filePath, dataFrame, timePeriod, sensors=None, ifweather=False, ifprevious=False):
     '''
-        filePath: the path to the model file
+        filePath: the path to the model files
         df: the using dataframe
         time: [start, end] y-m-d-h
         sensors:arrayLike[int] or None
@@ -171,11 +171,75 @@ def prediction(filePath, dataFrame, timePeriod, sensors=None, ifweather=False, i
                    template=template,
                     height=400)
 
+def prediction(modelPaths, dataFrame, timePeriod):
+    '''
+        modelPaths: the paths to the model files
+        df: the using dataframe
+        time: [start, end] y-m-d-h
+        sensors:arrayLike[int] or None
+        ifweather: if use weather
+        ifprevious:if use previous data
+    '''
+    dataforModel3 = dataFrame.drop(['Year'
+             , 'Unnamed: 0'
+             , 'Sensor_Name'
+             , 'latitude'
+             , 'longitude'
+             ,'Wind_direction'
+            ], axis=1) #model3 data
+    dataforModel2 = dataforModel3.drop([
+	          'previous1'
+             ,'previous2'
+            ], axis=1)
+    
+    dataforModel1 = dataforModel2.drop([
+             'Temperature'
+             ,'Humidity'            
+             ,'Wind_speed'
+             ,'Pressure'
+             ,'Condition'
+             ,'UV'	
+            ], axis=1)
+    oneHot1 = pd.get_dummies(dataforModel1, columns=['Sensor_ID'], prefix = ['id'],drop_first=False).dropna()
+    oneHot2 = pd.get_dummies(dataforModel2, columns=['Sensor_ID', 'Condition', 'UV'], prefix = ['id','weather', 'uv'],drop_first=False).dropna()
+    oneHot3 = pd.get_dummies(dataforModel3, columns=['Sensor_ID', 'Condition', 'UV'], prefix = ['id','weather', 'uv'],drop_first=False).dropna()
+    oneHot1 = dateCheck(oneHot1, timePeriod)
+    oneHot2 = dateCheck(oneHot2, timePeriod)
+    oneHot3 = dateCheck(oneHot3, timePeriod)
+    assert oneHot1.size>1 and oneHot2.size>1 and oneHot3.size>1
+    try:
+        model1 = joblib.load(modelPaths[0])
+        model2 = joblib.load(modelPaths[1])
+        model3 = joblib.load(modelPaths[2])
+    except:
+        raise Fail('Cannot load model file!')
+
+    X1 = oneHot1.loc[:,oneHot1.columns !='Hourly_Counts']
+    X2 = oneHot2.loc[:,oneHot2.columns !='Hourly_Counts']
+    X3 = oneHot3.loc[:,oneHot3.columns !='Hourly_Counts']
+    y1 = model1.predict(X1)
+    y2 = model2.predict(X2)
+    y3 = model3.predict(X3)
+    data = dateCheck(dataFrame, timePeriod)
+    data.reset_index(inplace=True)
+    data['predict1'] = y1
+    data['predict2'] = y2
+    data['predict3'] = y3
+
+    data = data.groupby('Yhours')[['Hourly_Counts', 'predict1', 'predict2', 'predict3']].agg('mean')
+    return px.line(data, x=data.index, 
+                    y=['Hourly_Counts', 'predict1', 'predict2', 'predict3'], 
+                    labels={'pop':'prediction Using ML vs actucal data'},
+                   template=template,
+                    height=400)
+
 if __name__ == '__main__':
     data = pd.read_csv('data/finalWithPreviousCountsandWeather.csv')
     data['Yhours'] = data['Yhours'].astype(int)
     data = data.set_index('Yhours').sort_index()
-    modelPath1 = 'data/datawithWeatherandPreviousCounts.pkl'
+    modelPath3 = 'data/datawithWeatherandPreviousCounts.pkl'
     modelPath2 = 'data/datawithWeather.pkl'
-    returned = prediction(modelPath2, data, ['2019-1-1-0', '2019-1-2-0'], ifweather=True, ifprevious=False)
+    modelPath1 = 'data/data.pkl'
+    modelPath = [modelPath1, modelPath2, modelPath3]
+    returned = prediction(modelPath, data, ['2019-1-1-0', '2019-1-2-0'])
     
